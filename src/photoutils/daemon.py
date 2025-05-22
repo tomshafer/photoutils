@@ -25,7 +25,7 @@ def watch_dir(watched: Path) -> None:
     queue = Queue[Path | None]()
 
     threads: list[Thread] = []
-    for i in range(os.process_cpu_count() or 1):
+    for i in range(2 * (os.process_cpu_count() or 1)):
         thread = Thread(target=run_thread, name=f"t-{i}", kwargs={"queue": queue})
         thread.start()
         threads.append(thread)
