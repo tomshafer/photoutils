@@ -86,7 +86,7 @@ class FileAddedHandler(FileSystemEventHandler):
 
 def move_image(file: Path, img_date: date) -> None:
     """Move image-like files into a directory tree."""
-    DIRS = {"RAF": "Raw Files", "DNG": "Raw Files", "JPG": "JPEGs", "MOV": "Videos"}
+    DIRS = {"RAF": "Raw Files", "DNG": "Raw Files", "JPG": "JPEGs"}
     dest = file.parent / str(img_date) / DIRS[file.suffix.upper()[1:]]
     dest.mkdir(parents=True, exist_ok=True)
 
