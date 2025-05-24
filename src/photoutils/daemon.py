@@ -7,6 +7,7 @@ from datetime import date, datetime
 from pathlib import Path
 from queue import Queue
 from threading import Thread
+from typing import Final
 
 from exiftool import ExifToolHelper
 from watchdog.events import DirCreatedEvent, FileCreatedEvent, FileSystemEventHandler
@@ -15,6 +16,16 @@ from watchdog.observers import Observer
 __all__ = ["watch_dir"]
 
 lg = logging.getLogger(__name__)
+
+
+# File extensions we allow operations against.
+# EXT => Destination subdirectory
+FILE_ACTIONS: Final[dict[str, str]] = {
+    "RAF": "Raw Files",
+    "DNG": "Raw Files",
+    "JPG": "JPEGs",
+    "MOV": "Videos",
+}
 
 
 def watch_dir(watched: Path) -> None:
@@ -63,8 +74,8 @@ def run_thread(queue: Queue[Path | None]) -> None:
             queue.task_done()
             return
 
-        lg.debug(f"Consuming path {path.name}")
-        if path.suffix.lower()[1:] in ("raf", "jpg", "dng"):
+        if path.suffix.upper()[1:] in FILE_ACTIONS:
+            lg.debug(f"Consuming path {path.name}")
             move_image(path, read_exif_date(path))
             queue.task_done()
 
@@ -86,8 +97,7 @@ class FileAddedHandler(FileSystemEventHandler):
 
 def move_image(file: Path, img_date: date) -> None:
     """Move image-like files into a directory tree."""
-    DIRS = {"RAF": "Raw Files", "DNG": "Raw Files", "JPG": "JPEGs"}
-    dest = file.parent / str(img_date) / DIRS[file.suffix.upper()[1:]]
+    dest = file.parent / str(img_date) / FILE_ACTIONS[file.suffix.upper()[1:]]
     dest.mkdir(parents=True, exist_ok=True)
 
     dest_file = dest / file.name
