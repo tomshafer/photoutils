@@ -11,4 +11,4 @@ adheres to [Semantic Versioning][].
 
 ## [0.0.1] (2025-05-24)
 
-[0.0.1]: https://github.com/tomshafer/photoutils/releases/tag/v0.0.1
+[0.0.1]: https://github.com/tomshafer/photoutils/releases/tag/0.0.1
