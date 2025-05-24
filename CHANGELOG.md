@@ -9,6 +9,8 @@ adheres to [Semantic Versioning][].
 [Keep a Changelog]: https://keepachangelog.com/en/1.1.0/
 [Semantic Versioning]: https://semver.org/spec/v2.0.0.htmlØ
 
+## [Unreleased]
+
 ## [0.0.1] (2025-05-24)
 
 ### Added
@@ -18,4 +20,5 @@ adheres to [Semantic Versioning][].
   automatically organizes photos and videos by date and file
   type.
 
+[Unreleased]: https://github.com/tomshafer/photoutils/compare/0.0.1...HEAD
 [0.0.1]: https://github.com/tomshafer/photoutils/releases/tag/0.0.1
