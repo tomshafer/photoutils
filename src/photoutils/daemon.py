@@ -49,6 +49,11 @@ class NotADirectoryError(OSError):
         super().__init__(f"the path {p} is not a directory")
 
 
+class MultipleTargetsError(FileExistsError):
+    def __init__(self, parent: Path, candidates: list[Path]) -> None:
+        super().__init__(f"{parent} has multiple potential children: {candidates}")
+
+
 class FileAddedHandler(FileSystemEventHandler):
     """Put file-creation events onto a queue."""
 
@@ -63,13 +68,31 @@ class FileAddedHandler(FileSystemEventHandler):
 
 def move_image(file: Path, img_date: date) -> None:
     """Move image-like files into a directory tree."""
-    dest = file.parent / str(img_date) / FILE_ACTIONS[file.suffix.upper()[1:]]
+    target_dir = resolve_target_dir(file.parent, img_date)
+    dest = target_dir / FILE_ACTIONS[file.suffix.upper()[1:]]
     dest.mkdir(parents=True, exist_ok=True)
 
     dest_file = dest / file.name
     lg.debug(f"Moving {file.name} to {dest_file.relative_to(file.parent)}")
     os.rename(file, dest_file)
     os.chmod(dest_file, mode=0o644)
+
+
+def resolve_target_dir(path: Path, image_date: date) -> Path:
+    """Resolve the destination for an image."""
+    if not path.is_dir():
+        raise NotADirectoryError(path)
+
+    date_ = image_date.isoformat()
+    candidates = [d for d in path.iterdir() if d.name.startswith(date_) and d.is_dir()]
+
+    if not candidates:
+        return path / date_
+
+    if len(candidates) == 1:
+        return candidates.pop()
+
+    raise MultipleTargetsError(path, candidates)
 
 
 def read_exif_date(file: Path) -> date:
