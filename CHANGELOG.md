@@ -11,6 +11,11 @@ adheres to [Semantic Versioning][].
 
 ## [Unreleased]
 
+### Changed
+
+- `resolve_image()` now uses any directory whose name begins with
+  the image's ISO-formatted date.
+
 ## [0.0.2] (2025-06-01)
 
 ### Added
