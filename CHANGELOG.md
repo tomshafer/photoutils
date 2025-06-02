@@ -11,6 +11,17 @@ adheres to [Semantic Versioning][].
 
 ## [Unreleased]
 
+### Added
+
+- Added a CI workflow to run the linter and type checker.
+- Added `py.typed`.
+
+### Changed
+
+- `photoutils daemon` is now single-threaded.
+- Fixed the package version number.
+- Marked the package as compatible with Pythons ≥ 3.10.
+
 ## [0.0.1] (2025-05-24)
 
 ### Added
