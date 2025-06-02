@@ -1,6 +1,6 @@
 [project]
 name = "photoutils"
-version = "0.0.2"
+version = "0.0.3a1"
 description = "Photo-management utilities."
 readme = "README.md"
 authors = [
