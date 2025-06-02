@@ -5,8 +5,6 @@ import os
 import time
 from datetime import date, datetime
 from pathlib import Path
-from queue import Queue
-from threading import Thread
 from typing import Final
 
 from exiftool import ExifToolHelper
@@ -33,16 +31,8 @@ def watch_dir(watched: Path) -> None:
     if not watched.is_dir():
         raise NotADirectoryError(watched)
 
-    queue = Queue[Path | None]()
-
-    threads: list[Thread] = []
-    for i in range(2 * (os.process_cpu_count() or 1)):
-        thread = Thread(target=run_thread, name=f"t-{i}", kwargs={"queue": queue})
-        thread.start()
-        threads.append(thread)
-
     observer = Observer()
-    observer.schedule(FileAddedHandler(queue), path=str(watched))
+    observer.schedule(FileAddedHandler(), path=str(watched))
     observer.start()
 
     try:
@@ -50,13 +40,8 @@ def watch_dir(watched: Path) -> None:
             time.sleep(1)
     except (Exception, KeyboardInterrupt):
         observer.stop()
-        for _ in threads:
-            queue.put(None)
-
-    observer.join()
-    queue.join()
-    for thread in threads:
-        thread.join()
+    finally:
+        observer.join()
 
 
 class NotADirectoryError(OSError):
@@ -64,35 +49,16 @@ class NotADirectoryError(OSError):
         super().__init__(f"the path {p} is not a directory")
 
 
-def run_thread(queue: Queue[Path | None]) -> None:
-    """Run a thread to pull and process events from a queue."""
-    while True:
-        path = queue.get()
-
-        # None is a sentinel for 'shut down'
-        if path is None:
-            queue.task_done()
-            return
-
-        if path.suffix.upper()[1:] in FILE_ACTIONS:
-            lg.debug(f"Consuming path {path.name}")
-            move_image(path, read_exif_date(path))
-            queue.task_done()
-
-
 class FileAddedHandler(FileSystemEventHandler):
     """Put file-creation events onto a queue."""
-
-    def __init__(self, queue: Queue[Path | None]) -> None:
-        self.queue = queue
 
     def on_created(self, event: DirCreatedEvent | FileCreatedEvent) -> None:
         if isinstance(event, DirCreatedEvent):
             return
 
         file = src_path_to_path(event.src_path)
-        self.queue.put(file)
-        lg.debug(f"Putting path '{file.name}'")
+        if file.suffix.upper()[1:] in FILE_ACTIONS:
+            move_image(file, read_exif_date(file))
 
 
 def move_image(file: Path, img_date: date) -> None:
