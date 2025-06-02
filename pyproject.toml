@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { name = "Tom Shafer", email = "tom@tshafer.com" }
 ]
-requires-python = ">=3.13"
+requires-python = ">=3.10"
 dependencies = [
     "pyexiftool>=0.5.6",
     "typer-slim>=0.15.4",
@@ -36,3 +36,6 @@ extend-ignore = ["UP038"]
 
 [tool.mypy]
 ignore_missing_imports = true
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
