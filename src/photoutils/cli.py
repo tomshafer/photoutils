@@ -18,6 +18,7 @@ lg = logging.getLogger(__name__)
 app = Typer(
     context_settings={"help_option_names": ["-h", "--help"]},
     help="Help with photo imports for post processing.",
+    add_completion=False,
 )
 
 # Directory watcher daemon
