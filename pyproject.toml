@@ -9,6 +9,7 @@ authors = [
 requires-python = ">=3.10"
 dependencies = [
     "pyexiftool>=0.5.6",
+    "rich>=13.0.0",
     "typer-slim>=0.15.4",
     "watchdog>=6.0.0",
 ]

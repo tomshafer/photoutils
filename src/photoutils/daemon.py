@@ -36,6 +36,9 @@ def watch_dir(watched: Path) -> None:
     file_queue: Queue[Path | None] = Queue()
     max_workers = min(8, (os.cpu_count() or 1) * 2)
 
+    lg.info(f"Starting daemon with [bold blue]{max_workers}[/bold blue] worker threads")
+    lg.info(f"Watching directory: [bold magenta]{watched}[/bold magenta]")
+
     with ThreadPoolExecutor(
         max_workers=max_workers,
         thread_name_prefix="file-processor",
@@ -90,7 +93,7 @@ def process_files_worker(file_queue: Queue[Path | None]) -> None:
                 file_queue.task_done()
                 break
 
-            lg.debug(f"Processing file: {file_path.name}")
+            lg.info(f"Processing file: [bold cyan]{file_path.name}[/bold cyan]")
 
             # Wait for file to be fully written
             wait_for_file(file_path)
@@ -98,6 +101,8 @@ def process_files_worker(file_queue: Queue[Path | None]) -> None:
             # Read EXIF and move file
             img_date = read_exif_date(file_path)
             move_image(file_path, img_date)
+
+            lg.info(f"Successfully processed [bold green]{file_path.name}[/bold green]")
 
             file_queue.task_done()
 
@@ -107,7 +112,7 @@ def process_files_worker(file_queue: Queue[Path | None]) -> None:
 
         # Other uncaught exception
         except Exception as e:
-            lg.error(f"Error processing file: {e}")
+            lg.error(f"Error processing file: [bold red]{e}[/bold red]")
 
             # Mark task as done even on error to prevent queue from hanging
             try:
@@ -132,7 +137,7 @@ class FileAddedHandler(FileSystemEventHandler):
         # Pre-filter files by extension before queuing
         if file.suffix.upper()[1:] in FILE_ACTIONS:
             self.file_queue.put(file)
-            lg.debug(f"Queued file: {file.name}")
+            lg.debug(f"Queued file: [yellow]{file.name}[/yellow]")
 
 
 def wait_for_file(file: Path) -> None:
@@ -203,7 +208,10 @@ def move_image(file: Path, img_date: date) -> None:
     dest.mkdir(parents=True, exist_ok=True)
 
     dest_file = dest / file.name
-    lg.debug(f"Moving {file.name} to {dest_file.relative_to(file.parent)}")
+    lg.debug(
+        f"Moving [cyan]{file.name}[/cyan] to "
+        f"[magenta]{dest_file.relative_to(file.parent)}[/magenta]"
+    )
     os.rename(file, dest_file)
     os.chmod(dest_file, mode=0o644)
 

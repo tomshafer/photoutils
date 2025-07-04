@@ -4,13 +4,19 @@ import logging
 from pathlib import Path
 from typing import Annotated
 
+from rich.logging import RichHandler
 from typer import Argument as Arg
 from typer import Option as Opt
 from typer import Typer
 
 from photoutils.daemon import watch_dir
 
-logging.basicConfig(level=logging.WARNING)
+logging.basicConfig(
+    level=logging.WARNING,
+    format="%(message)s",
+    datefmt="[%X]",
+    handlers=[RichHandler(rich_tracebacks=True, markup=True)],
+)
 lg = logging.getLogger(__name__)
 
 
