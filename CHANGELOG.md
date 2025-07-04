@@ -11,6 +11,8 @@ adheres to [Semantic Versioning][].
 
 ## [Unreleased]
 
+## [0.0.3] (2025-07-04)
+
 ### Added
 
 - Added `wait_for_file()`, which blocks until a file has positive
@@ -53,6 +55,7 @@ adheres to [Semantic Versioning][].
   automatically organizes photos and videos by date and file
   type.
 
-[Unreleased]: https://github.com/tomshafer/photoutils/compare/0.0.2...HEAD
+[Unreleased]: https://github.com/tomshafer/photoutils/compare/0.0.3...HEAD
+[0.0.3]: https://github.com/tomshafer/photoutils/releases/tag/0.0.3
 [0.0.2]: https://github.com/tomshafer/photoutils/releases/tag/0.0.2
 [0.0.1]: https://github.com/tomshafer/photoutils/releases/tag/0.0.1
