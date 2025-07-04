@@ -63,7 +63,36 @@ class FileAddedHandler(FileSystemEventHandler):
 
         file = src_path_to_path(event.src_path)
         if file.suffix.upper()[1:] in FILE_ACTIONS:
+            wait_for_file(file)
             move_image(file, read_exif_date(file))
+
+
+def wait_for_file(file: Path) -> None:
+    """Wait for a file to materialize."""
+    MAX_CHECKS = 10
+    MIN_TIME_2 = -5
+
+    last_size, cur_size, num_checks = 0, 0, 0
+    while True:
+        num_checks += 1
+        sleep_interval = 2 ** (MIN_TIME_2 + num_checks - 1)
+
+        # Wait for file existence
+        if not file.exists():
+            time.sleep(sleep_interval)
+            continue
+
+        # Wait for positive file size
+        cur_size = file.stat().st_size
+        if cur_size == 0 or cur_size != last_size:
+            time.sleep(sleep_interval)
+            last_size = cur_size
+            continue
+
+        if num_checks > MAX_CHECKS:
+            raise TimeoutError(f"File {file.name} never fully materialized")
+
+        break
 
 
 def move_image(file: Path, img_date: date) -> None:

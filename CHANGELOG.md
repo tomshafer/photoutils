@@ -11,6 +11,12 @@ adheres to [Semantic Versioning][].
 
 ## [Unreleased]
 
+### Added
+
+- Added `wait_for_file()`, which blocks until a file has positive
+  size for two (exponentially increasing) time steps. After a
+  fixed number of steps, it will raise `TimeoutError`.
+
 ### Changed
 
 - `resolve_image()` now uses any directory whose name begins with
