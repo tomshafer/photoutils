@@ -3,8 +3,10 @@
 import logging
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 from pathlib import Path
+from queue import Empty, Queue
 from typing import Final
 
 from exiftool import ExifToolHelper
@@ -31,17 +33,39 @@ def watch_dir(watched: Path) -> None:
     if not watched.is_dir():
         raise NotADirectoryError(watched)
 
-    observer = Observer()
-    observer.schedule(FileAddedHandler(), path=str(watched))
-    observer.start()
+    file_queue: Queue[Path | None] = Queue()
+    max_workers = min(8, (os.cpu_count() or 1) * 2)
 
-    try:
-        while True:
-            time.sleep(1)
-    except (Exception, KeyboardInterrupt):
-        observer.stop()
-    finally:
-        observer.join()
+    with ThreadPoolExecutor(
+        max_workers=max_workers,
+        thread_name_prefix="file-processor",
+    ) as executor:
+        # Start worker threads
+        for _ in range(max_workers):
+            executor.submit(process_files_worker, file_queue)
+
+        # Start the observer
+        observer = Observer()
+        observer.schedule(FileAddedHandler(file_queue), path=str(watched))
+        observer.start()
+
+        # Wait for action
+        try:
+            while True:
+                time.sleep(1)
+
+        except (Exception, KeyboardInterrupt):
+            lg.info("Shutdown requested, stopping observer...")
+            observer.stop()
+
+        finally:
+            observer.join()
+
+            # Signal workers to shut down
+            for _ in range(max_workers):
+                file_queue.put(None)
+
+            lg.info("Shutdown complete")
 
 
 class NotADirectoryError(OSError):
@@ -54,17 +78,61 @@ class MultipleTargetsError(FileExistsError):
         super().__init__(f"{parent} has multiple potential children: {candidates}")
 
 
+def process_files_worker(file_queue: Queue[Path | None]) -> None:
+    """Worker thread to process files from the queue."""
+    while True:
+        try:
+            file_path = file_queue.get(timeout=1)
+
+            # None is sentinel value for shutdown
+            if file_path is None:
+                lg.debug("Worker thread shutting down")
+                file_queue.task_done()
+                break
+
+            lg.debug(f"Processing file: {file_path.name}")
+
+            # Wait for file to be fully written
+            wait_for_file(file_path)
+
+            # Read EXIF and move file
+            img_date = read_exif_date(file_path)
+            move_image(file_path, img_date)
+
+            file_queue.task_done()
+
+        # Timeout from queue.get() - continue loop to check for shutdown
+        except Empty:
+            continue
+
+        # Other uncaught exception
+        except Exception as e:
+            lg.error(f"Error processing file: {e}")
+
+            # Mark task as done even on error to prevent queue from hanging
+            try:
+                file_queue.task_done()
+            except ValueError:
+                # task_done() called more times than items in queue
+                pass
+
+
 class FileAddedHandler(FileSystemEventHandler):
     """Put file-creation events onto a queue."""
+
+    def __init__(self, file_queue: Queue[Path | None]) -> None:
+        self.file_queue = file_queue
 
     def on_created(self, event: DirCreatedEvent | FileCreatedEvent) -> None:
         if isinstance(event, DirCreatedEvent):
             return
 
         file = src_path_to_path(event.src_path)
+
+        # Pre-filter files by extension before queuing
         if file.suffix.upper()[1:] in FILE_ACTIONS:
-            wait_for_file(file)
-            move_image(file, read_exif_date(file))
+            self.file_queue.put(file)
+            lg.debug(f"Queued file: {file.name}")
 
 
 def wait_for_file(file: Path) -> None:
