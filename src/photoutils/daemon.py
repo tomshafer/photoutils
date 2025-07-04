@@ -68,31 +68,64 @@ class FileAddedHandler(FileSystemEventHandler):
 
 
 def wait_for_file(file: Path) -> None:
-    """Wait for a file to materialize."""
-    MAX_CHECKS = 10
-    MIN_TIME_2 = -5
+    """Wait for a file to materialize using adaptive polling."""
+    MAX_TIMEOUT = 60  # seconds
+    RAPID_POLL_INTERVAL = 0.1  # 100ms for first 5 seconds
+    RAPID_POLL_DURATION = 5.0  # seconds
+    SLOW_POLL_INTERVAL = 0.5  # 500ms after rapid phase
+    STABILITY_CHECKS = 3  # consecutive stable size checks needed
 
-    last_size, cur_size, num_checks = 0, 0, 0
+    start_time = time.time()
+    last_size, stable_count = 0, 0
+    last_growth_time = start_time
+
+    lg.debug(f"Waiting for file {file.name} to materialize")
+
     while True:
-        num_checks += 1
-        sleep_interval = 2 ** (MIN_TIME_2 + num_checks - 1)
+        elapsed = time.time() - start_time
+
+        # Check timeout
+        if elapsed > MAX_TIMEOUT:
+            _msg = f"File {file.name} never fully materialized after {{MAX_TIMEOUT}} s"
+            raise TimeoutError(_msg)
 
         # Wait for file existence
         if not file.exists():
+            sleep_interval = (
+                RAPID_POLL_INTERVAL
+                if elapsed < RAPID_POLL_DURATION
+                else SLOW_POLL_INTERVAL
+            )
             time.sleep(sleep_interval)
             continue
 
-        # Wait for positive file size
+        # Check file size
         cur_size = file.stat().st_size
-        if cur_size == 0 or cur_size != last_size:
-            time.sleep(sleep_interval)
+
+        # File size is growing - reset stability counter
+        if cur_size > last_size:
+            stable_count = 0
             last_size = cur_size
-            continue
+            last_growth_time = time.time()
+            lg.debug(f"File {file.name} size: {cur_size} bytes")
 
-        if num_checks > MAX_CHECKS:
-            raise TimeoutError(f"File {file.name} never fully materialized")
+        # File size is stable
+        elif cur_size > 0 and cur_size == last_size:
+            stable_count += 1
+            if stable_count >= STABILITY_CHECKS:
+                lg.debug(f"File {file.name} stable after {elapsed:.2f}s")
+                break
 
-        break
+        # Determine polling interval based on recent growth
+        time_since_growth = time.time() - last_growth_time
+        if elapsed < RAPID_POLL_DURATION or time_since_growth < 1.0:
+            sleep_interval = RAPID_POLL_INTERVAL
+        else:
+            # Exponential backoff for edge cases, but cap at reasonable interval
+            backoff_factor = min(4, int(time_since_growth))
+            sleep_interval = min(2.0, SLOW_POLL_INTERVAL * (2**backoff_factor))
+
+        time.sleep(sleep_interval)
 
 
 def move_image(file: Path, img_date: date) -> None:

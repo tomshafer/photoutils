@@ -14,8 +14,8 @@ adheres to [Semantic Versioning][].
 ### Added
 
 - Added `wait_for_file()`, which blocks until a file has positive
-  size for two (exponentially increasing) time steps. After a
-  fixed number of steps, it will raise `TimeoutError`.
+  size for three time steps. After sixty seconds, a
+  `TimeoutError` will be raised.
 
 ### Changed
 
