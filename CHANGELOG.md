@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog][], and this project
 adheres to [Semantic Versioning][].
 
 [Keep a Changelog]: https://keepachangelog.com/en/1.1.0/
-[Semantic Versioning]: https://semver.org/spec/v2.0.0.htmlØ
+[Semantic Versioning]: https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
@@ -16,11 +16,20 @@ adheres to [Semantic Versioning][].
 - Added `wait_for_file()`, which blocks until a file has positive
   size for three time steps. After sixty seconds, a
   `TimeoutError` will be raised.
+- Re-implemented multithreading for file processing with
+  `ThreadPoolExecutor`.
+- Added Rich logging with colored output and better formatting.
 
 ### Changed
 
 - `resolve_image()` now uses any directory whose name begins with
   the image's ISO-formatted date.
+- `photoutils daemon` now uses multithreading again for better performance
+  on systems with multiple files being processed simultaneously.
+- File extension filtering now happens before queuing to reduce overhead.
+- Enhanced error handling ensures individual file processing failures don't
+  stop the entire daemon.
+- Improved logging output with Rich formatting for better visibility.
 
 ## [0.0.2] (2025-06-01)
 
