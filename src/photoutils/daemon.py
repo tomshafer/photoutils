@@ -49,6 +49,11 @@ class NotADirectoryError(OSError):
         super().__init__(f"the path {p} is not a directory")
 
 
+class MultipleTargetsError(FileExistsError):
+    def __init__(self, parent: Path, candidates: list[Path]) -> None:
+        super().__init__(f"{parent} has multiple potential children: {candidates}")
+
+
 class FileAddedHandler(FileSystemEventHandler):
     """Put file-creation events onto a queue."""
 
@@ -58,18 +63,98 @@ class FileAddedHandler(FileSystemEventHandler):
 
         file = src_path_to_path(event.src_path)
         if file.suffix.upper()[1:] in FILE_ACTIONS:
+            wait_for_file(file)
             move_image(file, read_exif_date(file))
+
+
+def wait_for_file(file: Path) -> None:
+    """Wait for a file to materialize using adaptive polling."""
+    MAX_TIMEOUT = 60  # seconds
+    RAPID_POLL_INTERVAL = 0.1  # 100ms for first 5 seconds
+    RAPID_POLL_DURATION = 5.0  # seconds
+    SLOW_POLL_INTERVAL = 0.5  # 500ms after rapid phase
+    STABILITY_CHECKS = 3  # consecutive stable size checks needed
+
+    start_time = time.time()
+    last_size, stable_count = 0, 0
+    last_growth_time = start_time
+
+    lg.debug(f"Waiting for file {file.name} to materialize")
+
+    while True:
+        elapsed = time.time() - start_time
+
+        # Check timeout
+        if elapsed > MAX_TIMEOUT:
+            _msg = f"File {file.name} never fully materialized after {{MAX_TIMEOUT}} s"
+            raise TimeoutError(_msg)
+
+        # Wait for file existence
+        if not file.exists():
+            sleep_interval = (
+                RAPID_POLL_INTERVAL
+                if elapsed < RAPID_POLL_DURATION
+                else SLOW_POLL_INTERVAL
+            )
+            time.sleep(sleep_interval)
+            continue
+
+        # Check file size
+        cur_size = file.stat().st_size
+
+        # File size is growing - reset stability counter
+        if cur_size > last_size:
+            stable_count = 0
+            last_size = cur_size
+            last_growth_time = time.time()
+            lg.debug(f"File {file.name} size: {cur_size} bytes")
+
+        # File size is stable
+        elif cur_size > 0 and cur_size == last_size:
+            stable_count += 1
+            if stable_count >= STABILITY_CHECKS:
+                lg.debug(f"File {file.name} stable after {elapsed:.2f}s")
+                break
+
+        # Determine polling interval based on recent growth
+        time_since_growth = time.time() - last_growth_time
+        if elapsed < RAPID_POLL_DURATION or time_since_growth < 1.0:
+            sleep_interval = RAPID_POLL_INTERVAL
+        else:
+            # Exponential backoff for edge cases, but cap at reasonable interval
+            backoff_factor = min(4, int(time_since_growth))
+            sleep_interval = min(2.0, SLOW_POLL_INTERVAL * (2**backoff_factor))
+
+        time.sleep(sleep_interval)
 
 
 def move_image(file: Path, img_date: date) -> None:
     """Move image-like files into a directory tree."""
-    dest = file.parent / str(img_date) / FILE_ACTIONS[file.suffix.upper()[1:]]
+    target_dir = resolve_target_dir(file.parent, img_date)
+    dest = target_dir / FILE_ACTIONS[file.suffix.upper()[1:]]
     dest.mkdir(parents=True, exist_ok=True)
 
     dest_file = dest / file.name
     lg.debug(f"Moving {file.name} to {dest_file.relative_to(file.parent)}")
     os.rename(file, dest_file)
     os.chmod(dest_file, mode=0o644)
+
+
+def resolve_target_dir(path: Path, image_date: date) -> Path:
+    """Resolve the destination for an image."""
+    if not path.is_dir():
+        raise NotADirectoryError(path)
+
+    date_ = image_date.isoformat()
+    candidates = [d for d in path.iterdir() if d.name.startswith(date_) and d.is_dir()]
+
+    if not candidates:
+        return path / date_
+
+    if len(candidates) == 1:
+        return candidates.pop()
+
+    raise MultipleTargetsError(path, candidates)
 
 
 def read_exif_date(file: Path) -> date:
