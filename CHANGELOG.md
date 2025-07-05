@@ -14,6 +14,7 @@ adheres to [Semantic Versioning][].
 ### Added
 
 - Added tests for core functionality with Claude Code.
+- Added test for directory prefix matching.
 
 ## [0.0.3] (2025-07-04)
 

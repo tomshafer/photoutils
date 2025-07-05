@@ -235,6 +235,21 @@ class TestResolveTargetDir:
         with pytest.raises(MultipleTargetsError):
             resolve_target_dir(temp_dir, test_date)
 
+    def test_resolve_target_dir_matches_existing_with_complex_suffix(
+        self,
+        temp_dir: Path,
+    ):
+        """Test images match existing dir w/suffix."""
+        test_date = date(2025, 7, 4)
+        existing_dir = temp_dir / "2025-07-04 Blah (Blah)"
+        existing_dir.mkdir()
+
+        result = resolve_target_dir(temp_dir, test_date)
+
+        assert result == existing_dir
+        # Verify no new directory was created
+        assert not (temp_dir / "2025-07-04").exists()
+
 
 class TestMoveImage:
     """Test the move_image function."""
