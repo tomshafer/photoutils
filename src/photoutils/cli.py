@@ -9,6 +9,7 @@ from typer import Argument as Arg
 from typer import Option as Opt
 from typer import Typer
 
+from photoutils.cleanup import cleanup_directory
 from photoutils.daemon import watch_dir
 
 logging.basicConfig(
@@ -31,8 +32,14 @@ app = Typer(
 daemon_app = Typer()
 app.add_typer(daemon_app)
 
+# Directory cleanup
+cleanup_app = Typer()
+app.add_typer(cleanup_app)
+
 _TA = Annotated[Path, Arg(help="Directory to watch for changes.", show_default=False)]
 _TV = Annotated[bool, Opt("--verbose", "-v", help="Show additional messages.")]
+_TC = Annotated[Path, Arg(help="Directory to clean up.", show_default=False)]
+_TD = Annotated[bool, Opt("--dry-run", "-d", help="Do not actually move files.")]
 
 
 @daemon_app.command()
@@ -40,3 +47,10 @@ def daemon(target: _TA, verbose: _TV = False) -> None:
     """Run a watcher daemon to organize new photos."""
     logging.getLogger("photoutils").setLevel("DEBUG" if verbose else "INFO")
     watch_dir(target)
+
+
+@cleanup_app.command()
+def cleanup(target: _TC, dry_run: _TD = False, verbose: _TV = False) -> None:
+    """Clean up a directory by organizing files into type-based subdirectories."""
+    logging.getLogger("photoutils").setLevel("DEBUG" if verbose else "INFO")
+    cleanup_directory(target, dry_run=dry_run)

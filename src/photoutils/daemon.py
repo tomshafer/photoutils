@@ -2,31 +2,24 @@
 
 import logging
 import os
-import re
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, datetime
 from pathlib import Path
 from queue import Empty, Queue
-from typing import Final
 
-from exiftool import ExifToolHelper
 from watchdog.events import DirCreatedEvent, FileCreatedEvent, FileSystemEventHandler
 from watchdog.observers import Observer
+
+from photoutils.core import (
+    FILE_ACTIONS,
+    NotADirectoryError,
+    move_image,
+    read_exif_date,
+)
 
 __all__ = ["watch_dir"]
 
 lg = logging.getLogger(__name__)
-
-
-# File extensions we allow operations against.
-# EXT => Destination subdirectory
-FILE_ACTIONS: Final[dict[str, str]] = {
-    "RAF": "Raw Files",
-    "DNG": "Raw Files",
-    "JPG": "JPEGs",
-    "MOV": "Videos",
-}
 
 
 def watch_dir(watched: Path) -> None:
@@ -37,8 +30,8 @@ def watch_dir(watched: Path) -> None:
     file_queue: Queue[Path | None] = Queue()
     max_workers = min(8, (os.cpu_count() or 1) * 2)
 
-    lg.info(f"Starting daemon with [bold blue]{max_workers}[/bold blue] worker threads")
-    lg.info(f"Watching directory: [bold magenta]{watched}[/bold magenta]")
+    lg.info(f"Starting daemon with [bold blue]{max_workers}[/] worker threads")
+    lg.info(f"Watching directory: [bold magenta]{watched}[/]")
 
     with ThreadPoolExecutor(
         max_workers=max_workers,
@@ -72,16 +65,6 @@ def watch_dir(watched: Path) -> None:
             lg.info("Shutdown complete")
 
 
-class NotADirectoryError(OSError):
-    def __init__(self, p: Path) -> None:
-        super().__init__(f"the path {p} is not a directory")
-
-
-class MultipleTargetsError(FileExistsError):
-    def __init__(self, parent: Path, candidates: list[Path]) -> None:
-        super().__init__(f"{parent} has multiple potential children: {candidates}")
-
-
 def process_files_worker(file_queue: Queue[Path | None]) -> None:
     """Worker thread to process files from the queue."""
     while True:
@@ -94,7 +77,7 @@ def process_files_worker(file_queue: Queue[Path | None]) -> None:
                 file_queue.task_done()
                 break
 
-            lg.info(f"Processing file: [bold cyan]{file_path.name}[/bold cyan]")
+            lg.info(f"Processing file: [bold cyan]{file_path.name}[/]")
 
             # Wait for file to be fully written
             wait_for_file(file_path)
@@ -103,7 +86,7 @@ def process_files_worker(file_queue: Queue[Path | None]) -> None:
             img_date = read_exif_date(file_path)
             move_image(file_path, img_date)
 
-            lg.info(f"Successfully processed [bold green]{file_path.name}[/bold green]")
+            lg.info(f"Successfully processed [bold green]{file_path.name}[/]")
 
             file_queue.task_done()
 
@@ -113,7 +96,7 @@ def process_files_worker(file_queue: Queue[Path | None]) -> None:
 
         # Other uncaught exception
         except Exception as e:
-            lg.error(f"Error processing file: [bold red]{e}[/bold red]")
+            lg.error(f"Error processing file: [bold red]{e}[/]")
 
             # Mark task as done even on error to prevent queue from hanging
             try:
@@ -200,89 +183,6 @@ def wait_for_file(file: Path) -> None:
             sleep_interval = min(2.0, SLOW_POLL_INTERVAL * (2**backoff_factor))
 
         time.sleep(sleep_interval)
-
-
-def _get_unique_filename(dest_dir: Path, filename: str) -> Path:
-    """Generate unique filename by adding numbered suffix if file exists."""
-    dest_file = dest_dir / filename
-    
-    # If file doesn't exist, return original path
-    if not dest_file.exists():
-        return dest_file
-    
-    # Parse filename to extract base name and extension
-    stem = dest_file.stem
-    suffix = dest_file.suffix
-    
-    # Check if filename already has a numbered suffix like "photo (1)"
-    match = re.search(r'^(.+)\s+\((\d+)\)$', stem)
-    if match:
-        base_name = match.group(1)
-        start_num = int(match.group(2)) + 1
-    else:
-        base_name = stem
-        start_num = 1
-    
-    # Find next available number
-    counter = start_num
-    while True:
-        new_filename = f"{base_name} ({counter}){suffix}"
-        new_dest_file = dest_dir / new_filename
-        if not new_dest_file.exists():
-            return new_dest_file
-        counter += 1
-
-
-def move_image(file: Path, img_date: date) -> None:
-    """Move image-like files into a directory tree."""
-    target_dir = resolve_target_dir(file.parent, img_date)
-    dest = target_dir / FILE_ACTIONS[file.suffix.upper()[1:]]
-    dest.mkdir(parents=True, exist_ok=True)
-
-    dest_file = _get_unique_filename(dest, file.name)
-    
-    # Log warning if duplicate was found
-    if dest_file.name != file.name:
-        lg.warning(
-            f"Duplicate file detected: [yellow]{file.name}[/yellow] → "
-            f"[yellow]{dest_file.name}[/yellow]"
-        )
-    
-    lg.debug(
-        f"Moving [cyan]{file.name}[/cyan] to "
-        f"[magenta]{dest_file.relative_to(file.parent)}[/magenta]"
-    )
-    os.rename(file, dest_file)
-    os.chmod(dest_file, mode=0o644)
-
-
-def resolve_target_dir(path: Path, image_date: date) -> Path:
-    """Resolve the destination for an image."""
-    if not path.is_dir():
-        raise NotADirectoryError(path)
-
-    date_ = image_date.isoformat()
-    candidates = [d for d in path.iterdir() if d.name.startswith(date_) and d.is_dir()]
-
-    if not candidates:
-        return path / date_
-
-    if len(candidates) == 1:
-        return candidates.pop()
-
-    raise MultipleTargetsError(path, candidates)
-
-
-def read_exif_date(file: Path) -> date:
-    """Read the file, create the structure, and move the file."""
-    # TODO: Make this better, considering multiple exif tags
-    lg.debug(f"Reading EXIF date for {file.name}")
-    with ExifToolHelper() as et:
-        tags: list[dict[str, str]] = et.get_tags([file], "EXIF:DateTimeOriginal")  # type: ignore
-        date_str = tags[0]["EXIF:DateTimeOriginal"].strip().split()[0]
-        img_date = datetime.strptime(date_str, "%Y:%m:%d").date()
-        lg.debug(f"EXIF date is {img_date}")
-        return img_date
 
 
 def src_path_to_path(src_path: bytes | str) -> Path:

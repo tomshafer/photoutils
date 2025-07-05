@@ -13,11 +13,20 @@ adheres to [Semantic Versioning][].
 
 ### Added
 
+- Added `photoutils cleanup` command for organizing existing directories.
+- Added `core.py` module with shared file processing logic.
+- Added `move_image_simple()` function for type-based file organization.
+- Added comprehensive test suite for cleanup functionality.
 - Added tests for core functionality with Claude Code.
 - Added test for directory prefix matching.
-- Added duplicate file handling with numbered suffixes (e.g.,
-  `photo.jpg` → `photo (1).jpg`).
+- Added duplicate file handling with numbered suffixes (e.g., `photo.jpg` → `photo (1).jpg`).
 - Added warning logs when duplicates are detected in processing.
+
+### Changed
+
+- Refactored common file processing logic from `daemon.py` into reusable `core.py` module.
+- Updated `daemon.py` to import shared functions from `core.py`.
+- Enhanced CLI with new cleanup subcommand alongside existing daemon functionality.
 
 ## [0.0.3] (2025-07-04)
 
