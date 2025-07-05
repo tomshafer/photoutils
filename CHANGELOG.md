@@ -11,6 +11,10 @@ adheres to [Semantic Versioning][].
 
 ## [Unreleased]
 
+### Added
+
+- Added tests for core functionality with Claude Code.
+
 ## [0.0.3] (2025-07-04)
 
 ### Added
