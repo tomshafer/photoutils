@@ -11,16 +11,18 @@ import pytest
 from pytest import LogCaptureFixture
 from watchdog.events import DirCreatedEvent, FileCreatedEvent
 
-from photoutils.daemon import (
+from photoutils.core import (
     FILE_ACTIONS,
-    FileAddedHandler,
     MultipleTargetsError,
     NotADirectoryError,
     _get_unique_filename,  # type: ignore
     move_image,
-    process_files_worker,
     read_exif_date,
     resolve_target_dir,
+)
+from photoutils.daemon import (
+    FileAddedHandler,
+    process_files_worker,
     src_path_to_path,
     wait_for_file,
 )
@@ -165,7 +167,7 @@ class TestReadExifDate:
             {"EXIF:DateTimeOriginal": "2023:12:25 14:30:00"}
         ]
 
-        with patch("photoutils.daemon.ExifToolHelper", return_value=mock_exiftool):
+        with patch("photoutils.core.ExifToolHelper", return_value=mock_exiftool):
             result = read_exif_date(sample_image_file)
 
         assert result == date(2023, 12, 25)
@@ -183,7 +185,7 @@ class TestReadExifDate:
             {"EXIF:DateTimeOriginal": "  2023:12:25 14:30:00  "}
         ]
 
-        with patch("photoutils.daemon.ExifToolHelper", return_value=mock_exiftool):
+        with patch("photoutils.core.ExifToolHelper", return_value=mock_exiftool):
             result = read_exif_date(sample_image_file)
 
         assert result == date(2023, 12, 25)
