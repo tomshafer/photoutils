@@ -22,7 +22,9 @@ class TestCleanupDirectory:
         with pytest.raises(NotADirectoryError):
             cleanup_directory(not_dir)
 
-    def test_cleanup_directory_no_files(self, temp_dir: Path, caplog: LogCaptureFixture):
+    def test_cleanup_directory_no_files(
+        self, temp_dir: Path, caplog: LogCaptureFixture
+    ):
         """Test cleanup when no files are found."""
         with caplog.at_level(logging.INFO):
             cleanup_directory(temp_dir)
@@ -35,7 +37,7 @@ class TestCleanupDirectory:
         # Create test files
         files = [
             ("test.JPG", "JPEGs"),
-            ("photo.jpg", "JPEGs"), 
+            ("photo.jpg", "JPEGs"),
             ("raw.RAF", "Raw Files"),
             ("backup.DNG", "Raw Files"),
             ("video.MOV", "Videos"),
@@ -75,20 +77,24 @@ class TestCleanupDirectory:
         assert "Would move" in caplog.text
         assert "Dry run completed" in caplog.text
 
-    def test_cleanup_directory_handles_duplicates(self, temp_dir: Path, caplog: LogCaptureFixture):
+    def test_cleanup_directory_handles_duplicates(
+        self,
+        temp_dir: Path,
+        caplog: LogCaptureFixture,
+    ):
         """Test that duplicate files are handled correctly."""
         # Create source files
         (temp_dir / "test.JPG").write_bytes(b"original")
-        
+
         # Create JPEGs directory with existing file
         jpegs_dir = temp_dir / "JPEGs"
         jpegs_dir.mkdir()
         (jpegs_dir / "test.JPG").write_bytes(b"existing")
-        
+
         # Create another file with same name
         (temp_dir / "test_copy.JPG").write_bytes(b"duplicate")
         (temp_dir / "test_copy.JPG").rename(temp_dir / "test2.JPG")
-        
+
         with caplog.at_level(logging.WARNING):
             cleanup_directory(temp_dir)
 
@@ -96,11 +102,15 @@ class TestCleanupDirectory:
         assert (jpegs_dir / "test.JPG").exists()
         assert (jpegs_dir / "test (1).JPG").exists()
         assert (jpegs_dir / "test2.JPG").exists()
-        
+
         # Check warning was logged
         assert "Duplicate file detected" in caplog.text
 
-    def test_cleanup_directory_handles_errors(self, temp_dir: Path, caplog: LogCaptureFixture):
+    def test_cleanup_directory_handles_errors(
+        self,
+        temp_dir: Path,
+        caplog: LogCaptureFixture,
+    ):
         """Test that errors are handled gracefully."""
         # Create a test file
         test_file = temp_dir / "test.JPG"
@@ -109,7 +119,7 @@ class TestCleanupDirectory:
         # Mock move_image_simple to raise an exception
         with patch("photoutils.cleanup.move_image_simple") as mock_move:
             mock_move.side_effect = Exception("Mock error")
-            
+
             with caplog.at_level(logging.ERROR):
                 cleanup_directory(temp_dir)
 
@@ -140,7 +150,11 @@ class TestCleanupDirectory:
             expected_path = temp_dir / expected_subdir / filename
             assert expected_path.exists()
 
-    def test_cleanup_directory_ignores_unsupported_files(self, temp_dir: Path, caplog: LogCaptureFixture):
+    def test_cleanup_directory_ignores_unsupported_files(
+        self,
+        temp_dir: Path,
+        caplog: LogCaptureFixture,
+    ):
         """Test that unsupported file types are ignored."""
         # Create mix of supported and unsupported files
         (temp_dir / "test.JPG").write_bytes(b"supported")
@@ -195,9 +209,9 @@ class TestConstants:
         """Test that FILE_ACTIONS is available from core."""
         expected = {
             "RAF": "Raw Files",
-            "DNG": "Raw Files", 
+            "DNG": "Raw Files",
             "JPG": "JPEGs",
             "MOV": "Videos",
         }
-        
+
         assert FILE_ACTIONS == expected
