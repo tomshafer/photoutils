@@ -1,0 +1,75 @@
+# photoutils
+
+Photo-management utilities for automatically organizing new photos based on EXIF data.
+
+## Features
+
+- **Automatic photo organization**: Watches directories for new photos and organizes them by date
+- **Duplicate handling**: Automatically renames duplicates with numbered suffixes
+- **Multi-format support**: Handles RAW files (RAF, DNG), JPEGs, and videos (MOV)
+- **Concurrent processing**: Uses multiple worker threads for efficient file processing
+
+## Installation
+
+### Install from GitHub
+
+```bash
+pip install git+https://github.com/tomshafer/photoutils.git
+```
+
+### Clone and develop
+
+```bash
+git clone https://github.com/tomshafer/photoutils.git
+cd photoutils
+uv sync --dev
+```
+
+## Usage
+
+### Command Line Interface
+
+The main command is `photoutils` which provides a daemon for watching directories:
+
+```bash
+# Watch a directory for new photos
+uv run photoutils daemon /path/to/watch/directory
+
+# Watch with verbose logging
+uv run photoutils daemon --verbose /path/to/watch/directory
+```
+
+### How it works
+
+1. **Watches** a specified directory for new image files
+2. **Reads EXIF data** to extract the original photo date
+3. **Creates date-based folders** (e.g., `2024-01-15/`)
+4. **Organizes files** into subdirectories by type:
+   - `Raw Files/` - RAF, DNG files
+   - `JPEGs/` - JPG files  
+   - `Videos/` - MOV files
+5. **Handles duplicates** by adding numbered suffixes like `photo (1).jpg`
+
+### Example directory structure
+
+```
+/watched/directory/
+| 2024-01-15/
+|— Raw Files/
+|  |— DSC_0001.RAF
+|  |— DSC_0002.DNG
+|— JPEGs/
+|  |— DSC_0001.JPG
+|  |— DSC_0002.JPG
+|— Videos/
+|  |— VID_0001.MOV
+|— 2024-01-16/
+   |— JPEGs/
+      |— DSC_0003.JPG
+```
+
+## Requirements
+
+- Python 3.10+
+- ExifTool (for EXIF data extraction)
+- uv for dependency management

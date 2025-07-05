@@ -42,3 +42,6 @@ jobs:
       
       - name: Mypy
         run: uv run mypy src/photoutils
+      
+      - name: Test
+        run: uv run pytest src/tests

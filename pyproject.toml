@@ -1,6 +1,6 @@
 [project]
 name = "photoutils"
-version = "0.0.3"
+version = "0.1.0"
 description = "Photo-management utilities."
 readme = "README.md"
 authors = [
@@ -34,6 +34,9 @@ build-backend = "hatchling.build"
 [tool.ruff.lint]
 extend-select = ["B", "S", "I", "ANN", "C4", "FA", "RUF", "UP", "D"]
 extend-ignore = ["UP038"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/tests/*" = ["S101", "S108", "ANN001", "ANN201", "ANN202"]
 
 [tool.mypy]
 ignore_missing_imports = true
