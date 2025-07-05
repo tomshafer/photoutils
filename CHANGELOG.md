@@ -15,6 +15,9 @@ adheres to [Semantic Versioning][].
 
 - Added tests for core functionality with Claude Code.
 - Added test for directory prefix matching.
+- Added duplicate file handling with numbered suffixes (e.g.,
+  `photo.jpg` → `photo (1).jpg`).
+- Added warning logs when duplicates are detected in processing.
 
 ## [0.0.3] (2025-07-04)
 

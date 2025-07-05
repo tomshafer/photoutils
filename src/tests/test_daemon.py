@@ -1,5 +1,6 @@
 """Tests for the photoutils daemon module."""
 
+import logging
 import time
 from datetime import date
 from pathlib import Path
@@ -7,6 +8,7 @@ from queue import Queue
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pytest import LogCaptureFixture
 from watchdog.events import DirCreatedEvent, FileCreatedEvent
 
 from photoutils.daemon import (
@@ -14,6 +16,7 @@ from photoutils.daemon import (
     FileAddedHandler,
     MultipleTargetsError,
     NotADirectoryError,
+    _get_unique_filename,  # type: ignore
     move_image,
     process_files_worker,
     read_exif_date,
@@ -251,6 +254,67 @@ class TestResolveTargetDir:
         assert not (temp_dir / "2025-07-04").exists()
 
 
+class TestGetUniqueFilename:
+    """Test the _get_unique_filename function."""
+
+    def test_unique_filename_no_conflict(self, temp_dir: Path):
+        """Test that original filename is returned when no conflict exists."""
+        result = _get_unique_filename(temp_dir, "test.jpg")
+        assert result == temp_dir / "test.jpg"
+
+    def test_unique_filename_single_conflict(self, temp_dir: Path):
+        """Test that numbered suffix is added for first conflict."""
+        existing_file = temp_dir / "test.jpg"
+        existing_file.touch()
+
+        result = _get_unique_filename(temp_dir, "test.jpg")
+        assert result == temp_dir / "test (1).jpg"
+
+    def test_unique_filename_multiple_conflicts(self, temp_dir: Path):
+        """Test that counter increments for multiple conflicts."""
+        # Create existing files
+        (temp_dir / "test.jpg").touch()
+        (temp_dir / "test (1).jpg").touch()
+        (temp_dir / "test (2).jpg").touch()
+
+        result = _get_unique_filename(temp_dir, "test.jpg")
+        assert result == temp_dir / "test (3).jpg"
+
+    def test_unique_filename_existing_numbered_suffix(self, temp_dir: Path):
+        """Test handling of filenames that already have numbered suffixes."""
+        existing_file = temp_dir / "test (5).jpg"
+        existing_file.touch()
+
+        result = _get_unique_filename(temp_dir, "test (5).jpg")
+        assert result == temp_dir / "test (6).jpg"
+
+    def test_unique_filename_complex_existing_suffix(self, temp_dir: Path):
+        """Test handling of complex filenames with existing numbered suffixes."""
+        # Create files with different numbering patterns
+        (temp_dir / "photo (1).jpg").touch()
+        (temp_dir / "photo (2).jpg").touch()
+
+        result = _get_unique_filename(temp_dir, "photo (1).jpg")
+        assert result == temp_dir / "photo (3).jpg"
+
+    def test_unique_filename_different_extensions(self, temp_dir: Path):
+        """Test that different extensions don't conflict."""
+        (temp_dir / "test.jpg").touch()
+
+        result = _get_unique_filename(temp_dir, "test.RAF")
+        assert result == temp_dir / "test.RAF"
+
+    def test_unique_filename_long_base_name(self, temp_dir: Path):
+        """Test handling of long base names."""
+        long_name = "a" * 100 + ".jpg"
+        existing_file = temp_dir / long_name
+        existing_file.touch()
+
+        result = _get_unique_filename(temp_dir, long_name)
+        expected = temp_dir / f"{'a' * 100} (1).jpg"
+        assert result == expected
+
+
 class TestMoveImage:
     """Test the move_image function."""
 
@@ -304,6 +368,91 @@ class TestMoveImage:
 
         expected_path = temp_dir / "2023-12-25" / "JPEGs" / sample_image_file.name
         assert oct(expected_path.stat().st_mode)[-3:] == "644"
+
+    def test_move_image_handles_duplicates(
+        self,
+        temp_dir: Path,
+        caplog: LogCaptureFixture,
+    ):
+        """Test that move_image handles duplicate files correctly."""
+        test_date = date(2023, 12, 25)
+
+        # Create source files
+        source_file1 = temp_dir / "test.JPG"
+        source_file2 = temp_dir / "test_copy.JPG"
+        source_file1.write_bytes(b"test data 1")
+        source_file2.write_bytes(b"test data 2")
+
+        # Move first file
+        move_image(source_file1, test_date)
+
+        # Rename second file to match first file's name
+        source_file2.rename(temp_dir / "test.JPG")
+
+        # Move second file (should get numbered suffix)
+        with caplog.at_level(logging.WARNING):
+            move_image(temp_dir / "test.JPG", test_date)
+
+        # Check that both files exist with correct names
+        original_path = temp_dir / "2023-12-25" / "JPEGs" / "test.JPG"
+        duplicate_path = temp_dir / "2023-12-25" / "JPEGs" / "test (1).JPG"
+
+        assert original_path.exists()
+        assert duplicate_path.exists()
+        assert original_path.read_bytes() == b"test data 1"
+        assert duplicate_path.read_bytes() == b"test data 2"
+
+        # Check that warning was logged
+        assert "Duplicate file detected" in caplog.text
+        assert "test.JPG" in caplog.text and "test (1).JPG" in caplog.text
+
+    def test_move_image_handles_multiple_duplicates(
+        self,
+        temp_dir: Path,
+        caplog: LogCaptureFixture,
+    ):
+        """Test that move_image handles multiple duplicate files correctly."""
+        test_date = date(2023, 12, 25)
+
+        # Create and move multiple files with same name
+        for i in range(3):
+            source_file = temp_dir / "duplicate.JPG"
+            source_file.write_bytes(f"test data {i}".encode())
+
+            with caplog.at_level(logging.WARNING):
+                move_image(source_file, test_date)
+
+        # Check that all files exist with correct names
+        original_path = temp_dir / "2023-12-25" / "JPEGs" / "duplicate.JPG"
+        duplicate1_path = temp_dir / "2023-12-25" / "JPEGs" / "duplicate (1).JPG"
+        duplicate2_path = temp_dir / "2023-12-25" / "JPEGs" / "duplicate (2).JPG"
+
+        assert original_path.exists()
+        assert duplicate1_path.exists()
+        assert duplicate2_path.exists()
+
+        # Check that warnings were logged for duplicates
+        warning_logs = [
+            record for record in caplog.records if record.levelname == "WARNING"
+        ]
+        assert len(warning_logs) == 2  # Two duplicates should generate warnings
+
+    def test_move_image_no_warning_for_unique_files(
+        self,
+        temp_dir: Path,
+        caplog: LogCaptureFixture,
+    ):
+        """Test that no warning is logged for unique files."""
+        test_date = date(2023, 12, 25)
+
+        source_file = temp_dir / "unique.JPG"
+        source_file.write_bytes(b"test data")
+
+        with caplog.at_level(logging.WARNING):
+            move_image(source_file, test_date)
+
+        # Check that no warning was logged
+        assert "Duplicate file detected" not in caplog.text
 
 
 class TestProcessFilesWorker:

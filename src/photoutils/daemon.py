@@ -2,6 +2,7 @@
 
 import logging
 import os
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
@@ -201,13 +202,52 @@ def wait_for_file(file: Path) -> None:
         time.sleep(sleep_interval)
 
 
+def _get_unique_filename(dest_dir: Path, filename: str) -> Path:
+    """Generate unique filename by adding numbered suffix if file exists."""
+    dest_file = dest_dir / filename
+    
+    # If file doesn't exist, return original path
+    if not dest_file.exists():
+        return dest_file
+    
+    # Parse filename to extract base name and extension
+    stem = dest_file.stem
+    suffix = dest_file.suffix
+    
+    # Check if filename already has a numbered suffix like "photo (1)"
+    match = re.search(r'^(.+)\s+\((\d+)\)$', stem)
+    if match:
+        base_name = match.group(1)
+        start_num = int(match.group(2)) + 1
+    else:
+        base_name = stem
+        start_num = 1
+    
+    # Find next available number
+    counter = start_num
+    while True:
+        new_filename = f"{base_name} ({counter}){suffix}"
+        new_dest_file = dest_dir / new_filename
+        if not new_dest_file.exists():
+            return new_dest_file
+        counter += 1
+
+
 def move_image(file: Path, img_date: date) -> None:
     """Move image-like files into a directory tree."""
     target_dir = resolve_target_dir(file.parent, img_date)
     dest = target_dir / FILE_ACTIONS[file.suffix.upper()[1:]]
     dest.mkdir(parents=True, exist_ok=True)
 
-    dest_file = dest / file.name
+    dest_file = _get_unique_filename(dest, file.name)
+    
+    # Log warning if duplicate was found
+    if dest_file.name != file.name:
+        lg.warning(
+            f"Duplicate file detected: [yellow]{file.name}[/yellow] → "
+            f"[yellow]{dest_file.name}[/yellow]"
+        )
+    
     lg.debug(
         f"Moving [cyan]{file.name}[/cyan] to "
         f"[magenta]{dest_file.relative_to(file.parent)}[/magenta]"
